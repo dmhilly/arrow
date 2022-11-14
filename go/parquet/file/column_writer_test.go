@@ -709,3 +709,25 @@ func (b *BooleanValueWriterSuite) TestAlternateBooleanValues() {
 		b.Equal(i%2 == 0, b.ValuesOut.([]bool)[i])
 	}
 }
+
+func TestDataPageSplitting(t *testing.T) {
+	sc := schema.NewSchema(schema.NewGroupNode("schema", parquet.Repetitions.Required, schema.FieldList{
+		schema.NewPrimitiveNode("column", parquet.Repetitions.Optional, parquet.Types.Int32, -1, -1),
+	}))
+
+	props := parquet.NewWriterProperties(
+		parquet.WithDataPageSize(100),
+		parquet.WithDictionaryPageSizeLimit(1000000),
+		parquet.WithBatchSize(1),
+	)
+
+	var buf bytes.Buffer
+	fileWriter := file.NewParquetWriter(buf, sc, file.WithWriterProps(props))
+
+	rgWriter := fileWriter.AppendRowGroup()
+	columnWriter := rgWriter.NextColumn().(*file.Int32ColumnChunkWriter)
+
+	columnWriter.WriteBatch([]int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+		nil, nil)
+
+}
