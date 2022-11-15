@@ -712,11 +712,8 @@ func (b *BooleanValueWriterSuite) TestAlternateBooleanValues() {
 }
 
 func TestDataPageSplitting(t *testing.T) {
-	// TODO: schema is wrong.
 	sc := schema.MustGroup(schema.NewGroupNode("schema", parquet.Repetitions.Required, schema.FieldList{
-		schema.Must(schema.ListOf(
-			schema.Must(schema.NewPrimitiveNode("column", parquet.Repetitions.Optional, parquet.Types.Int64, -1, -1)),
-			parquet.Repetitions.Optional, -1)),
+		schema.Must(schema.NewPrimitiveNode("column", parquet.Repetitions.Optional, parquet.Types.Int64, -1, -1)),
 	}, -1))
 
 	props := parquet.NewWriterProperties(
