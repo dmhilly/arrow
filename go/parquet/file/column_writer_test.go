@@ -19,6 +19,7 @@ package file_test
 import (
 	"bytes"
 	"math"
+	"os"
 	"reflect"
 	"runtime"
 	"sync"
@@ -711,23 +712,52 @@ func (b *BooleanValueWriterSuite) TestAlternateBooleanValues() {
 }
 
 func TestDataPageSplitting(t *testing.T) {
-	sc := schema.NewSchema(schema.NewGroupNode("schema", parquet.Repetitions.Required, schema.FieldList{
-		schema.NewPrimitiveNode("column", parquet.Repetitions.Optional, parquet.Types.Int32, -1, -1),
-	}))
+	// TODO: schema is wrong.
+	sc := schema.MustGroup(schema.NewGroupNode("schema", parquet.Repetitions.Required, schema.FieldList{
+		schema.Must(schema.ListOf(
+			schema.Must(schema.NewPrimitiveNode("column", parquet.Repetitions.Optional, parquet.Types.Int64, -1, -1)),
+			parquet.Repetitions.Optional, -1)),
+	}, -1))
 
 	props := parquet.NewWriterProperties(
+		parquet.WithCompression(compress.Codecs.Snappy),
 		parquet.WithDataPageSize(100),
 		parquet.WithDictionaryPageSizeLimit(1000000),
 		parquet.WithBatchSize(1),
 	)
 
-	var buf bytes.Buffer
-	fileWriter := file.NewParquetWriter(buf, sc, file.WithWriterProps(props))
+	parquetFile, err := os.Create("actual.parquet")
+	if err != nil {
+		t.Fatalf("failed creating file: %v", err)
+	}
+	defer parquetFile.Close()
 
+	fileWriter := file.NewParquetWriter(parquetFile, sc, file.WithWriterProps(props))
 	rgWriter := fileWriter.AppendRowGroup()
-	columnWriter := rgWriter.NextColumn().(*file.Int32ColumnChunkWriter)
+	columnWriter, err := rgWriter.NextColumn()
+	if err != nil {
+		t.Fatalf("failed getting next column: %v", err)
+	}
 
-	columnWriter.WriteBatch([]int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-		nil, nil)
+	vals := make([]int64, 100)
+	dls := make([]int16, 100)
+	rls := make([]int16, 100)
+	for i := 0; i < 100; i++ {
+		vals[i] = int64(i + 1)
+		dls[i] = 1
+	}
 
+	columnWriter.(*file.Int64ColumnChunkWriter).WriteBatch(vals, dls, rls)
+
+	if err := columnWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = rgWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = fileWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
